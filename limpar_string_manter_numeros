@@ -11,10 +11,10 @@ lv_len = STRLEN( lv_input ).
 lv_output = ''.
 
 DO lv_len TIMES.
-  lv_index = sy-index - 1.
-  lv_char = lv_input+lv_index(1).
-  IF lv_char CO '0123456789'.
-    CONCATENATE lv_output lv_char INTO lv_output.
+  lv_index = sy-index - 1.                                   "Usar sy-index pq automatiza a contagem. Usa -1, pq a contagem de string abap começa com zero
+  lv_char = lv_input+lv_index(1).                            "Assim se cria substring(lv_index) no abap. O numero 1 significa a posição que deseja capturar.
+  IF lv_char CO '0123456789'.                                "CO significa contains only.
+    CONCATENATE lv_output lv_char INTO lv_output.            "Vai concatenar somente o caracter que estiver contido em '0123456789'.
   ENDIF.
 ENDDO.
 
