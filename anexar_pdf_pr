@@ -1,0 +1,418 @@
+**&---------------------------------------------------------------------*
+**& Report ZXXXXXXXXXXXXX
+**&---------------------------------------------------------------------*
+**& Descrição: anexar um pdf em uma Purchase Requisition (ME51N) e vincular um documento DMS (transação CV01N) PDF à um item dessa mesma PR.
+**&  Parte 1: anexar um pdf em uma PR
+**&  Parte 2: Criar DMS pdf e vincular a um item da PR
+**&---------------------------------------------------------------------*
+REPORT zxxxxxxxxxxxxx.
+
+DATA: git_path TYPE TABLE OF sood6.
+DATA: g_folderid TYPE soodk.
+DATA: g_filename TYPE string.
+
+*START-OF-SELECTION.
+
+*1.GET the folder id
+
+CALL FUNCTION 'SO_FOLDER_ROOT_ID_GET'
+  EXPORTING
+*   owner     = ' '
+    region    = 'B'
+  IMPORTING
+    folder_id = g_folderid
+* exceptions
+*   communication_failure       = 1
+*   owner_not_exist             = 2
+*   system_failure              = 3
+*   x_error   = 4
+*   others    = 5
+  .
+IF sy-subrc <> 0.
+* message id sy-msgid type sy-msgty number sy-msgno
+*         with sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+ENDIF.
+
+BREAK-POINT.
+
+*2. INSERT the object
+DATA: g_docdata LIKE sodocchgi1.
+DATA: g_extension TYPE soodk-objtp.
+DATA: git_objhdr  TYPE TABLE OF solisti1 WITH HEADER LINE,
+      git_objcont TYPE TABLE OF solisti1 WITH HEADER LINE,
+      git_hexcont TYPE TABLE OF solix WITH HEADER LINE,
+      g_docinfo   TYPE sofolenti1.
+
+DATA: g_path TYPE string.
+
+*2.1  Read file
+
+DATA: gv_base64 TYPE string.
+
+gv_base64 = |JVBERi0xLjEKJcKlwrHDqwoKMSAwIG9iagogIDw8IC9UeXBlIC9DYXRhbG9nCiAgICAgL1BhZ2VzIDIgMCBSCiAgPj4KZW5kb2JqCgoyIDAgb2JqCiAgPDwgL1R5cGUgL1BhZ2VzCiAgICAgL0tpZHMgWzMgMCBSXQogICAgIC9Db3VudCAxCiAgICAgL01lZGlhQm94IFswIDAgMzAwIDE0NF0KICA+PgplbmRvYmoKC| &&
+|jMgMCBvYmoKICA8PCAgL1R5cGUgL1BhZ2UKICAgICAgL1BhcmVudCAyIDAgUgogICAgICAvUmVzb3VyY2VzCiAgICAgICA8PCAvRm9udAogICAgICAgICAgIDw8IC9GMQogICAgICAgICAgICAgICA8PCAvVHlwZSAvRm9udAogICAgICAgICAgICAgICAgICAvU3VidHlwZSAvVHlwZTEKICAgICAgICAgICAgICAgICAgL0Jhc2VGb2| &&
+|50IC9UaW1lcy1Sb21hbgogICAgICAgICAgICAgICA+PgogICAgICAgICAgID4+CiAgICAgICA+PgogICAgICAvQ29udGVudHMgNCAwIFIKICA+PgplbmRvYmoKCjQgMCBvYmoKICA8PCAvTGVuZ3RoIDU1ID4+CnN0cmVhbQogIEJUCiAgICAvRjEgMTggVGYKICAgIDAgMCBUZAogICAgKEhlbGxvIFdvcmxkKSBUagogIEVUCmVuZHN| &&
+|0cmVhbQplbmRvYmoKCnhyZWYKMCA1CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxOCAwMDAwMCBuIAowMDAwMDAwMDc3IDAwMDAwIG4gCjAwMDAwMDAxNzggMDAwMDAgbiAKMDAwMDAwMDQ1NyAwMDAwMCBuIAp0cmFpbGVyCiAgPDwgIC9Sb290IDEgMCBSCiAgICAgIC9TaXplIDUKICA+PgpzdGFydHhyZWYKNTY1CiUlRU9G| &&
+|Cg==|.
+
+
+DATA lv_bin_data TYPE  xstring.
+
+"Converter Base64 string para Binário
+CALL FUNCTION 'SCMS_BASE64_DECODE_STR'
+  EXPORTING
+    input  = gv_base64
+*   UNESCAPE       = 'X'
+  IMPORTING
+    output = lv_bin_data
+* EXCEPTIONS
+*   FAILED = 1
+*   OTHERS = 2
+  .
+IF sy-subrc <> 0.
+* Implement suitable error handling here
+ENDIF.
+
+*DATA: lt_bin_table  TYPE STANDARD TABLE OF solix,
+DATA: lt_bin_table  TYPE solix_tab,
+      lv_bin_length TYPE i.
+
+" Converter binário para tabela binária
+CALL FUNCTION 'SCMS_XSTRING_TO_BINARY'
+  EXPORTING
+    buffer        = lv_bin_data
+*   APPEND_TO_TABLE       = ' '
+  IMPORTING
+    output_length = lv_bin_length
+  TABLES
+    binary_tab    = lt_bin_table.
+
+
+
+*  PERFORM load_local_file TABLES git_hexcont   "git_objcont
+*                        CHANGING g_filename
+*                                 g_path
+*                                 g_extension.
+
+
+g_docdata-obj_name  = 'MESSAGE'.
+g_docdata-obj_descr = 'relatorio-paytrack.pdf'.
+g_docdata-obj_langu = 'PT'.
+
+git_objhdr-line = '&SO_FILENAME=relatorio-paytrack.pdf'.
+APPEND git_objhdr.
+git_objhdr-line = '&SO_FORMAT=BIN'.
+APPEND git_objhdr.
+
+
+DATA: et_vsi_error  LIKE TABLE OF bapiret2.
+
+CALL FUNCTION 'SO_DOCUMENT_INSERT_API1'
+  EXPORTING
+    folder_id                  = g_folderid         " ID of folder in which document is to be created
+    document_data              = g_docdata          " Document attributes (general header)
+    document_type              = 'PDF'              " Document Class
+*   iv_vsi_profile             =                    " Virus Scan Profile
+  IMPORTING
+    document_info              = g_docinfo          " Complete attributes of document
+  TABLES
+    object_header              = git_objhdr         " Header data for document (spec.header)
+*   object_content             = git_objcont        " Document contents (text)
+    contents_hex               = lt_bin_table       " Document contents (binary)
+*   object_para                =                    " SET/GET parameter for processing
+*   object_parb                =                    " Fields and values for processing
+    et_vsi_error               = et_vsi_error       " Return Parameters
+  EXCEPTIONS
+    folder_not_exist           = 1                  " Specified folder does not exist
+    document_type_not_exist    = 2                  " Document type does not exist
+    operation_no_authorization = 3                  " No authorization to create document
+    parameter_error            = 4                  " Invalid combination of parameter values
+    x_error                    = 5                  " Internal error or database inconsistency
+    enqueue_error              = 6                  " Required locks could not be set
+    OTHERS                     = 7.
+IF sy-subrc <> 0.
+  WRITE:/ 'SO_DOCUMENT_INSERT_API1 SY-SUBRC = ', sy-subrc.
+ENDIF.
+
+
+*3. Create binary relation
+DATA: g_bizojb     TYPE borident,
+      g_attachment TYPE borident.
+
+* Object key = personnel number + trip number
+g_bizojb-objkey = '0010033359'.
+g_bizojb-objtype = 'BUS2105'.
+
+*attachment folder id is in g_docinfo
+g_attachment-objkey  = g_docinfo-doc_id.
+g_attachment-objtype = 'MESSAGE'.
+
+CALL FUNCTION 'BINARY_RELATION_CREATE'
+  EXPORTING
+    obj_rolea    = g_bizojb
+    obj_roleb    = g_attachment
+    relationtype = 'ATTA'
+*   fire_events  = 'X'
+* IMPORTING
+*   binrel       =
+* TABLES
+*   binrel_attrib  =
+* EXCEPTIONS
+*   no_model     = 1
+*   internal_error = 2
+*   unknown      = 3
+*   OTHERS       = 4
+  .
+IF sy-subrc <> 0.
+* MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*         WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+ENDIF.
+
+*4. Commit
+
+COMMIT WORK.
+
+BREAK-POINT.
+
+*###############################################################################################
+
+DATA: documentdata  LIKE  bapi_doc_draw2.
+DATA: return1  LIKE  bapiret2.
+
+DATA: documentnumber  LIKE  bapi_doc_aux-docnumber.
+
+DATA: wa_objectlinks LIKE  bapi_doc_drad,
+      it_objectlinks LIKE TABLE OF bapi_doc_drad.
+
+documentdata-documenttype    = 'DRW'.
+documentdata-documentversion = '00'.
+documentdata-documentpart    = '000'.
+documentdata-description     = 'TESTANDO CRIAR DOCUMENTO SAP BAPI'.
+documentdata-statusextern    = 'ST'.
+documentdata-statuslog       = 'TESTANDO'.
+
+wa_objectlinks-objecttype = 'EBAN'.
+wa_objectlinks-objectkey = '001003335900010'.
+APPEND wa_objectlinks TO it_objectlinks.
+
+CALL FUNCTION 'BAPI_DOCUMENT_CREATE2'
+  EXPORTING
+    documentdata   = documentdata
+*   HOSTNAME       =
+*   DOCBOMCHANGENUMBER         =
+*   DOCBOMVALIDFROM            =
+*   DOCBOMREVISIONLEVEL        =
+*   CAD_MODE       = ' '
+*   PF_FTP_DEST    = ' '
+*   PF_HTTP_DEST   = ' '
+*   DEFAULTCLASS   = 'X'
+  IMPORTING
+*   DOCUMENTTYPE   =
+    documentnumber = documentnumber
+*   DOCUMENTPART   =
+*   DOCUMENTVERSION            =
+    return         = return1
+ TABLES
+*   CHARACTERISTICVALUES       =
+*   CLASSALLOCATIONS           =
+*   DOCUMENTDESCRIPTIONS       =
+   OBJECTLINKS    =   it_objectlinks
+*   DOCUMENTSTRUCTURE          =
+*   DOCUMENTFILES  =
+*   LONGTEXTS      =
+*   COMPONENTS     =
+  .
+
+BREAK-POINT.
+
+COMMIT WORK.
+
+DATA: lt_data TYPE soli_tab.
+
+CALL FUNCTION 'SO_SOLIXTAB_TO_SOLITAB'
+  EXPORTING
+    ip_solixtab = lt_bin_table
+  IMPORTING
+    ep_solitab  = lt_data.
+
+BREAK-POINT.
+
+DATA: gv_sum TYPE i.
+
+DATA: it_files_x LIKE TABLE OF cvapi_doc_file,
+      it_content LIKE TABLE OF drao,
+      wa_files_x LIKE  cvapi_doc_file,
+      wa_content LIKE  drao.
+
+wa_files_x-appnr = 1.
+wa_files_x-dappl = 'PDF'.
+wa_files_x-langu = 'PT'.
+wa_files_x-storage_cat = 'DFS_FMPO'.
+wa_files_x-filename = 'relatorio-paytrack.pdf'.
+APPEND wa_files_x TO it_files_x.
+
+
+LOOP AT lt_bin_table INTO DATA(wa_bin_table).
+
+  wa_content-dokar = 'DRW'.
+  wa_content-doknr = documentnumber.
+  wa_content-dokvr = '00'.
+  wa_content-doktl = '000'.
+*  wa_content-appnr = '1'.
+
+  gv_sum = gv_sum + 001.
+  wa_content-zaehl = gv_sum.
+
+  wa_content-orln = lv_bin_length.
+  wa_content-orbkl = '255'.
+  wa_content-orblk = wa_bin_table-line.
+
+  APPEND wa_content TO it_content.
+
+ENDLOOP.
+
+CALL FUNCTION 'CVAPI_DOC_CHECKIN'
+  EXPORTING
+    pf_dokar           = 'DRW'
+    pf_doknr           = documentnumber
+    pf_dokvr           = '00'
+    pf_doktl           = '000'
+*   PS_DOC_STATUS      =
+*   PF_FTP_DEST        = ' '
+*   PF_HTTP_DEST       = ' '
+*   PF_HOSTNAME        = ' '
+*   PS_API_CONTROL     =
+*   PF_REPLACE         = ' '
+    pf_content_provide = 'TBL'
+* IMPORTING
+*   PSX_MESSAGE        =
+  TABLES
+    pt_files_x         = it_files_x
+*   PT_COMP_X          =              "Arquivos adicionais
+    pt_content         = it_content.
+
+BREAK-POINT.
+
+CONSTANTS : c_bus2009 TYPE swo_objtyp VALUE 'BUS2105',
+            c_atta(4) TYPE c VALUE 'ATTA',
+            c_ext(3)  TYPE c VALUE 'EXT',
+            c_b(1)    TYPE c VALUE 'B',
+            c_x(1)    TYPE c VALUE 'X',
+            c_o(1)    TYPE c VALUE 'O'.
+
+DATA: wa_folder_id  LIKE  soodk.
+
+CALL FUNCTION 'SO_FOLDER_ROOT_ID_GET'
+  EXPORTING
+    region                = c_b
+  IMPORTING
+    folder_id             = wa_folder_id
+  EXCEPTIONS
+    communication_failure = 1
+    owner_not_exist       = 2
+    system_failure        = 3
+    x_error               = 4
+    OTHERS                = 5.
+
+BREAK-POINT.
+
+DATA: wa_fol_id   TYPE soodk,
+      wa_object   TYPE borident,
+      wa_obj_data TYPE sood1, " OBJECT DEF AND CHANGE ATTRIBUTES
+      ls_objhead  TYPE soli,
+      it_objhead  TYPE STANDARD TABLE OF soli,
+      wa_folmem_k TYPE sofmk, "folder content DATA
+      wa_note     TYPE borident, " bor OBJECT IDENTIFIER
+      lv_ep_note  TYPE borident-objkey. "“bor OBJECT KEY
+
+
+DATA lv_extensions TYPE char10.
+DATA lv_file TYPE string.
+
+DATA lv_swo_typeid TYPE swo_typeid.
+
+lv_swo_typeid = '001003335900010'.
+
+lv_file = 'nome_arquivo_paytrack'.
+lv_extensions = 'PDF'.
+
+wa_object-objkey  = lv_swo_typeid. " PO number
+wa_object-objtype = c_bus2009.    " bus number
+*–
+wa_obj_data-objsns   = c_o.     " sensitivity of object (o-standard)
+wa_obj_data-objla    = sy-langu. " language
+wa_obj_data-objdes   = lv_file. "iv_slug. " slug value – description
+wa_obj_data-file_ext = lv_extensions.
+wa_obj_data-objlen   = lv_bin_length. "lines( lt_data ) * 255.
+
+TRANSLATE wa_obj_data-file_ext TO UPPER CASE.
+
+ls_objhead-line = '&SO_FILENAME=Nome_arquivo_paytrack.pdf'.
+APPEND ls_objhead TO it_objhead.
+
+ls_objhead-line = '&SO_FORMAT=BIN'.
+APPEND ls_objhead TO it_objhead.
+
+
+DATA: wa_obj_id LIKE  soodk.
+
+CALL FUNCTION 'SO_OBJECT_INSERT'
+  EXPORTING
+    folder_id                  = wa_folder_id
+    object_type                = c_ext
+    object_hd_change           = wa_obj_data
+  IMPORTING
+    object_id                  = wa_obj_id
+  TABLES
+    objhead                    = it_objhead
+    objcont                    = lt_data
+  EXCEPTIONS
+    active_user_not_exist      = 1
+    communication_failure      = 2
+    component_not_available    = 3
+    dl_name_exist              = 4
+    folder_not_exist           = 5
+    folder_no_authorization    = 6
+    object_type_not_exist      = 7
+    operation_no_authorization = 8
+    owner_not_exist            = 9
+    parameter_error            = 10
+    substitute_not_active      = 11
+    substitute_not_defined     = 12
+    system_failure             = 13
+    x_error                    = 14
+    OTHERS                     = 15.
+
+BREAK-POINT.
+
+IF sy-subrc = 0 AND wa_object-objkey IS NOT INITIAL.
+  wa_folmem_k-foltp = wa_folder_id-objtp.
+  wa_folmem_k-folyr = wa_folder_id-objyr.
+  wa_folmem_k-folno = wa_folder_id-objno.
+*/Please note: wa_fol_id and wa_obj_id are different work areas
+  wa_folmem_k-doctp = wa_obj_id-objtp.
+  wa_folmem_k-docyr = wa_obj_id-objyr.
+  wa_folmem_k-docno = wa_obj_id-objno.
+
+  lv_ep_note = wa_folmem_k.
+  wa_note-objtype = 'MESSAGE'.
+  wa_note-objkey = lv_ep_note.
+
+  CALL FUNCTION 'BINARY_RELATION_CREATE_COMMIT'
+    EXPORTING
+      obj_rolea      = wa_object
+      obj_roleb      = wa_note
+      relationtype   = c_atta
+    EXCEPTIONS
+      no_model       = 1
+      internal_error = 2
+      unknown        = 3
+      OTHERS         = 4.
+*
+  IF sy-subrc EQ 0.
+* Commit it
+    COMMIT WORK.
+  ENDIF.
+ENDIF.
+
+BREAK-POINT.
