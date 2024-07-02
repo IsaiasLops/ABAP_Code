@@ -1,0 +1,6 @@
+"Converter data de yyyy/mm/dd para dd/mm/yyyy
+      CALL FUNCTION 'CONVERT_DATE_FORMAT'
+       EXPORTING
+         I_DATE            = lv_datum    "Entrar com data formatada em yyyy/mm/dd
+       IMPORTING
+         E_CALC_DATE       = lv_datum_br. "Retorno data com formato dd/mm/yyyy
