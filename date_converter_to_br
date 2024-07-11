@@ -1,0 +1,19 @@
+data gv_date TYPE datum.
+data gv_date_format(10) TYPE c.
+data gv_day(2) TYPE c.
+data gv_month(2) TYPE c.
+data gv_year(4) TYPE c.
+
+gv_date  = '20240710'.
+gv_day   = gv_date+6(2).
+gv_month = gv_date+4(2).
+gv_year  = gv_date(4).
+
+CONCATENATE: gv_day gv_month gv_year INTO gv_date_format SEPARATED BY '/'.
+
+WRITE: | gv_date: { gv_date } |,
+       / | gv_day: { gv_day } |,
+       / | gv_month: { gv_month } |,
+       / | gv_year: { gv_year } |.
+
+BREAK-POINT.
